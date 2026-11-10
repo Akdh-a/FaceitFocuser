@@ -1,0 +1,205 @@
+:root {
+  --bg: #0e0e10;
+  --card: #18181b;
+  --card-hover: #1e1e22;
+  --line: #26262b;
+  --text: #f1f1f3;
+  --muted: #8b8b94;
+  --accent: #ff5500;
+  --accent-soft: rgba(255, 85, 0, 0.14);
+  --off: #3a3a41;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  width: 340px;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.35 "Segoe UI", system-ui, -apple-system, sans-serif;
+  user-select: none;
+}
+
+button { font: inherit; color: inherit; cursor: pointer; }
+
+/* ── Шапка ── */
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 14px;
+  background: linear-gradient(180deg, rgba(255, 85, 0, 0.12), transparent);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 11px; }
+.logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: grid; place-items: center;
+  background: var(--accent);
+  box-shadow: 0 4px 14px rgba(255, 85, 0, 0.35);
+}
+.logo svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; }
+.title { font-size: 15px; font-weight: 700; letter-spacing: 0.2px; }
+.status { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.status b { color: var(--accent); font-weight: 600; }
+
+/* ── Переключатель ── */
+.switch { position: relative; display: inline-flex; flex-shrink: 0; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch .track {
+  width: 36px; height: 20px; border-radius: 999px;
+  background: var(--off);
+  transition: background 0.18s;
+  position: relative;
+}
+.switch .thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #fff;
+  transition: transform 0.18s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.switch input:checked + .track { background: var(--accent); }
+.switch input:checked + .track .thumb { transform: translateX(16px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch.big .track { width: 44px; height: 24px; }
+.switch.big .thumb { width: 20px; height: 20px; }
+.switch.big input:checked + .track .thumb { transform: translateX(20px); }
+
+/* ── Пресеты ── */
+.presets { display: flex; gap: 6px; padding: 12px 16px 4px; }
+.presets button {
+  flex: 1;
+  padding: 7px 4px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  font-size: 12px; font-weight: 600;
+  color: var(--muted);
+  transition: all 0.15s;
+}
+.presets button:hover { color: var(--text); border-color: #3a3a41; }
+.presets button.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+/* ── Вкладки ── */
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin: 10px 16px 0;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--card);
+}
+.tabs button {
+  flex: 1;
+  padding: 7px 0 6px;
+  border: 0; border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px; font-weight: 600;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  transition: all 0.15s;
+}
+.tabs button:hover { color: var(--text); }
+.tabs button.active { background: #26262b; color: var(--text); }
+.tabs .count { font-size: 10px; font-weight: 500; color: var(--muted); }
+.tabs button.active .count { color: var(--accent); }
+
+/* ── Список настроек ── */
+main { padding: 10px 16px 6px; display: flex; flex-direction: column; gap: 6px; min-height: 236px; }
+.tab-desc { color: var(--muted); font-size: 12px; margin: 2px 2px 4px; }
+
+.opt {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.opt:hover { background: var(--card-hover); }
+.opt.on { border-color: rgba(255, 85, 0, 0.25); }
+.opt-icon {
+  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: #232328; color: var(--muted);
+  transition: all 0.15s;
+}
+.opt.on .opt-icon { background: var(--accent-soft); color: var(--accent); }
+.opt-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.opt-text { flex: 1; min-width: 0; }
+.opt-title { font-weight: 600; }
+.opt-sub { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+
+/* Что входит в "Скрыть ELO" */
+.includes {
+  padding: 10px 12px 4px;
+  border-radius: 10px;
+  background: var(--card);
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+.includes.on { opacity: 1; }
+.includes-head {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 6px;
+}
+.inc { display: flex; align-items: center; gap: 9px; padding: 5px 0; color: #c9c9cf; font-size: 12px; }
+.inc svg { width: 14px; height: 14px; flex-shrink: 0; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.includes.on .inc svg { stroke: var(--accent); }
+.includes:not(.on) .inc span { text-decoration: line-through; text-decoration-color: #55555c; }
+
+/* Чей ELO скрывать */
+.scope {
+  padding: 10px 12px 12px;
+  border-radius: 10px;
+  background: var(--card);
+  transition: opacity 0.15s;
+}
+.scope.off { opacity: 0.4; pointer-events: none; }
+.seg {
+  display: flex; gap: 2px; padding: 3px;
+  border-radius: 8px; background: #111114;
+}
+.seg button {
+  flex: 1; padding: 6px 0;
+  border: 0; border-radius: 6px;
+  background: transparent; color: var(--muted);
+  font-size: 12px; font-weight: 600;
+  transition: all 0.15s;
+}
+.seg button:hover { color: var(--text); }
+.seg button.active { background: var(--accent); color: #fff; }
+.acc { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: #111114; }
+.acc-ava {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent); font-weight: 700;
+}
+.acc-name { font-weight: 600; }
+.acc-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.nick { display: block; margin-top: 10px; }
+.nick span { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 5px; }
+.nick input {
+  width: 100%; padding: 8px 10px;
+  border-radius: 8px; border: 1px solid var(--line);
+  background: #111114; color: var(--text);
+  font: inherit; outline: none;
+  user-select: text;
+}
+.nick input:focus { border-color: var(--accent); }
+.hint { margin-top: 8px; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+
+/* Главный выключатель выключен — всё приглушено */
+body.disabled .presets,
+body.disabled .tabs,
+body.disabled main { opacity: 0.4; pointer-events: none; }
+
+.foot {
+  padding: 10px 16px 14px;
+  color: #5c5c64;
+  font-size: 11px;
+  text-align: center;
+}

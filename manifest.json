@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "FACEIT Focus — Hide ELO",
+  "version": "1.0.0",
+  "description": "Скрывает ELO и изменения ELO (+/-) на FACEIT, чтобы сосредоточиться на игре.",
+  "permissions": ["storage"],
+  "action": {
+    "default_title": "FACEIT Focus",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.faceit.com/*"],
+      "js": ["content.js"],
+      "css": ["hide.css"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ]
+}
