@@ -1,0 +1,90 @@
+/* Элементы, помеченные content.js, скрываются, пока соответствующая опция включена.
+   data-elo-off на <html> — главный выключатель; data-show-<имя> — этот пункт показан. */
+
+/* ── ELO ── */
+html:not([data-elo-off]):not([data-show-elo]) [data-elo-hidden],
+/* Компоненты FACEIT с Elo в имени класса — скрываются сразу при отрисовке */
+html:not([data-elo-off]):not([data-show-elo]) [class*="__Elo"],
+html:not([data-elo-off]):not([data-show-elo]) [class*="EloPoints"],
+html:not([data-elo-off]):not([data-show-elo]) [class*="EloBadge"] {
+  visibility: hidden !important;
+}
+
+/* ── Изменения +/− ── */
+html:not([data-elo-off]):not([data-show-delta]) [data-elo-delta],
+html:not([data-elo-off]):not([data-show-delta]) [class*="EloDelta"],
+html:not([data-elo-off]):not([data-show-delta]) [class*="EloChange"] {
+  visibility: hidden !important;
+}
+
+/* ── Сезоны ── */
+html:not([data-elo-off]):not([data-show-season]) [data-elo-season] {
+  visibility: hidden !important;
+}
+
+/* ── Уровень ── */
+html:not([data-elo-off]):not([data-show-level]) [class*="SkillIcon"],
+html:not([data-elo-off]):not([data-show-level]) [data-elo-level],
+html:not([data-elo-off]):not([data-show-level]) svg:has(> title):has(circle.background):has(path.bar-bg) {
+  visibility: hidden !important;
+}
+/* Бейдж "уровень + ELO" целиком — только когда скрыто и то и другое (иначе остаётся пустая плашка) */
+html:not([data-elo-off]):not([data-show-level]):not([data-show-elo]) [data-elo-badge] {
+  visibility: hidden !important;
+}
+
+/* ── Elo до следующего уровня: "76" → "??" ── */
+/* Сама фраза "Elo нужно для перехода на следующий уровень" видна всегда,
+   даже если какое-то общее правило (например, класс с Elo) пытается её скрыть */
+[data-elo-keep],
+[data-elo-keep] * {
+  visibility: visible !important;
+}
+html:not([data-elo-off]):not([data-show-next]) [data-elo-qq] {
+  font-size: 0 !important;
+}
+html:not([data-elo-off]):not([data-show-next]) [data-elo-qq]::after {
+  content: "??";
+  font-size: 1rem;
+  visibility: visible;
+}
+
+/* ── Полоска уровней в профиле ── */
+html:not([data-elo-off]):not([data-show-bars]) [class*="styles__Track-"] {
+  display: none !important;
+}
+html:not([data-elo-off]):not([data-show-bars]) [data-elo-bar] {
+  background: #3a3a3a !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+/* ── Monthly Ladder ── */
+html:not([data-elo-off]):not([data-show-ladder]) [data-elo-ladder] {
+  visibility: hidden !important;
+}
+
+/* ── Monthly Mission (и его кнопка-обёртка) ── */
+html:not([data-elo-off]):not([data-show-mission]) [class*="missionContainer"],
+html:not([data-elo-off]):not([data-show-mission]) [data-base-ui-click-trigger]:has(> [class*="missionContainer"]) {
+  display: none !important;
+}
+
+/* Стоит в конце файла: при равной специфичности побеждает правило ниже */
+/* ── Режим "только свой ELO": чужой ELO (без пометки data-elo-mine) снова видно.
+   На своём профиле (data-elo-own-page) это правило не действует — там всё твоё. ── */
+html[data-elo-scope-mine]:not([data-elo-own-page]) [data-elo-hidden]:not([data-elo-mine]),
+html[data-elo-scope-mine]:not([data-elo-own-page]) [data-elo-delta]:not([data-elo-mine]),
+html[data-elo-scope-mine]:not([data-elo-own-page]) [data-elo-season]:not([data-elo-mine]),
+html[data-elo-scope-mine]:not([data-elo-own-page]) [data-elo-badge]:not([data-elo-mine]),
+html[data-elo-scope-mine]:not([data-elo-own-page]) [class*="__Elo"]:not([data-elo-mine]),
+html[data-elo-scope-mine]:not([data-elo-own-page]) [class*="EloPoints"]:not([data-elo-mine]),
+html[data-elo-scope-mine]:not([data-elo-own-page]) [class*="EloBadge"]:not([data-elo-mine]),
+html[data-elo-scope-mine]:not([data-elo-own-page]) [class*="EloDelta"]:not([data-elo-mine]),
+html[data-elo-scope-mine]:not([data-elo-own-page]) [class*="EloChange"]:not([data-elo-mine]),
+/* Значок уровня других игроков тоже видно — скрыт только свой */
+html[data-elo-scope-mine]:not([data-elo-own-page]) [class*="SkillIcon"]:not([data-elo-mine]),
+html[data-elo-scope-mine]:not([data-elo-own-page]) [data-elo-level]:not([data-elo-mine]),
+html[data-elo-scope-mine]:not([data-elo-own-page]) svg:has(> title):has(circle.background):has(path.bar-bg):not([data-elo-mine]) {
+  visibility: visible !important;
+}

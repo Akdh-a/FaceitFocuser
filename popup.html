@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="head">
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path d="M3 3l18 18"/></svg>
+      </div>
+      <div>
+        <div class="title">FACEIT Focus</div>
+        <div class="status" id="status">&nbsp;</div>
+      </div>
+    </div>
+    <label class="switch big" title="Главный выключатель">
+      <input type="checkbox" id="enabled">
+      <span class="track"><span class="thumb"></span></span>
+    </label>
+  </header>
+
+  <section class="presets" id="presets">
+    <button data-preset="all">Скрыть всё</button>
+    <button data-preset="level">Только уровень</button>
+    <button data-preset="none">Показать всё</button>
+  </section>
+
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+  <main id="panel" role="tabpanel"></main>
+
+  <footer class="foot">Изменения применяются сразу, без перезагрузки страницы</footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
