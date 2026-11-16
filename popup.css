@@ -213,6 +213,16 @@ main { padding: 10px 16px 6px; display: flex; flex-direction: column; gap: 6px; 
   border-radius: 10px;
   background: var(--card);
 }
+.language-card { margin-bottom: 8px; }
+.language-setting { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.language-setting select {
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #111114;
+  color: var(--text);
+  font: inherit;
+}
 .theme-title { font-weight: 700; }
 .theme-desc { margin-top: 3px; color: var(--muted); font-size: 11.5px; }
 .theme-swatches { display: flex; gap: 12px; margin-top: 16px; }
