@@ -16,6 +16,7 @@
   const KEEP_ATTR = 'data-elo-keep';      // никогда не скрывать (фраза "до след. уровня")
   const QQ_ATTR = 'data-elo-qq';          // число заменяется на "??"
   const LEVEL_ATTR = 'data-elo-level';    // значок уровня, найденный по структуре (комната матча)
+  const TILT_ATTR = 'data-elo-tilt';      // win rate и серии побед/поражений
 
   // Карточки сезонов в профиле: "SEASON 8 · 1 504 · Максимум в сезоне 1 586"
   // Только "Максимум в сезоне": по "Season 9" ловилась и "Статистика Season 9" с числом матчей
@@ -33,8 +34,10 @@
   const CONTEXT_RE = /\belo\b|до\s+уровня|to\s+level|победа|поражение|\bwin\b|\bloss\b/i;
   const LADDER_RE = /ladder|ладдер/i;                                        // "Monthly Ladder"
   const FLEX_RE = /гибк|flexible|ограничени|restrict|range|диапазон/i;       // "Гибкий ELO" в карточках режимов
+  const ANTI_TILT_RE = /процент\s+побед|win\s*rate|winrate|(?:win(?:ning)?|loss|losing|побед|пораж)\s*streak|серия\s+(?:побед|поражений)/i;
+  const ANTI_TILT_HINT_RE = /win|rate|streak|процент|серия|побед|пораж/i;
   // Быстрый отсев: узлы без цифр и без этих слов нам не интересны (это большинство текста страницы)
-  const RELEVANT_RE = /\d|elo|ladder|ладдер|season|сезон|нужно|needed|reach/i;
+  const RELEVANT_RE = /\d|elo|ladder|ладдер|season|сезон|нужно|needed|reach|win|rate|streak|процент|серия/i;
   // Значок уровня: svg (лобби) или <i role="img"> (комната матча)
   const LEVEL_ICON = 'svg, img, canvas, i, [role="img"], [class*="SkillIcon"], [style*="background-image"]';
   const SKIP = 'script, style, textarea, input, [contenteditable="true"]';
@@ -64,6 +67,17 @@
     if (attr !== KEEP_ATTR && attr !== QQ_ATTR && el.closest(`[${KEEP_ATTR}]`)) return;
     if (!el.hasAttribute(attr)) el.setAttribute(attr, '');
     if (OWNABLE.includes(attr)) tagMine(el);
+  };
+
+  const markTiltMetric = (el) => {
+    for (let cur = el, i = 0; cur && cur !== document.body && i < 6; cur = cur.parentElement, i++) {
+      const text = shortText(cur, 60, ' ');
+      if (text === null) break;
+      if (ANTI_TILT_RE.test(text) && /\d/.test(text)) {
+        mark(cur, TILT_ATTR);
+        return;
+      }
+    }
   };
 
   // ── Режим "скрывать только свой ELO" ──
@@ -137,12 +151,19 @@
   // Свой профиль (/players/<ник>/...) — в режиме "только свой" там скрывается всё
   let lastPath = '';
   const updateOwnPage = () => {
-    if (location.pathname === lastPath) return;
+    if (location.pathname === lastPath) return false;
     lastPath = location.pathname;
     const nick = ownNick;
     const own = !!nick && decodeURIComponent(location.pathname).toLowerCase().split('/').includes(nick) &&
       /\/players\//i.test(location.pathname);
     root.toggleAttribute('data-elo-own-page', own);
+    const path = location.pathname;
+    const context = /\/players\/[^/]+(?:\/|$)/i.test(path) ? 'profile'
+      : /\/(?:party|lobby|lobbies|queue)(?:\/|$)/i.test(path) ? 'lobby'
+      : /\/(?:matches?|room)(?:\/|$)/i.test(path) ? 'match'
+      : 'other';
+    root.setAttribute('data-elo-context', context);
+    return true;
   };
 
   // ── Автоопределение своего ника (вводить вручную не нужно) ──
@@ -439,6 +460,7 @@
     if (!text || done.get(node) === text || !RELEVANT_RE.test(text)) return;
     const el = node.parentElement;
     if (!el || el.closest(SKIP)) return;
+    if (ANTI_TILT_HINT_RE.test(text)) markTiltMetric(el);
 
     // Значок уровня, которого нет под классами SkillIcon (например, в комнате матча)
     const icon = findLevelIcon(node, el, text);
@@ -563,7 +585,7 @@
   let scheduled = false;
   const flush = () => {
     scheduled = false;
-    updateOwnPage(); // SPA: переход между страницами виден по изменениям DOM
+    if (updateOwnPage()) apply({});
     scheduleDetect();
     const nodes = pending;
     pending = new Set();
@@ -618,6 +640,11 @@
     hideLevel: true,    // значок уровня
     hideLadder: true,   // Monthly Ladder
     hideMission: true,  // Monthly Mission
+    hideTilt: false,
+    contextProfile: 'default',
+    contextLobby: 'default',
+    contextMatch: 'default',
+    revealUntil: 0,
     eloScope: 'all',    // 'all' — скрывать весь ELO, 'mine' — только свой (ELO других игроков видно)
     nickname: '',       // ник, указанный вручную (необязательно)
     autoNickname: '',   // ник, определённый автоматически
@@ -630,9 +657,28 @@
     hideNext: ['next'],
     hideBars: ['bars'],
     hideLevel: ['level'], hideLadder: ['ladder'], hideMission: ['mission'],
+    hideTilt: ['tilt'],
   };
   const current = { ...SETTINGS };
-  function nextHidden() { return current.enabled && current.hideNext; }
+  const contextMode = () => {
+    const key = {
+      profile: 'contextProfile',
+      lobby: 'contextLobby',
+      match: 'contextMatch',
+    }[root.getAttribute('data-elo-context')];
+    const mode = key && current[key];
+    return ['default', 'levelOnly', 'antiTilt', 'hide', 'show'].includes(mode) ? mode : 'default';
+  };
+  const settingHidden = (key) => {
+    if (!current.enabled || Number(current.revealUntil) > Date.now()) return false;
+    const mode = contextMode();
+    if (mode === 'show') return false;
+    if (mode === 'hide') return true;
+    if (mode === 'levelOnly' || mode === 'antiTilt') return key !== 'hideLevel';
+    return Boolean(current[key]);
+  };
+  function nextHidden() { return settingHidden('hideNext'); }
+  let revealTimer = 0;
 
   const apply = (s) => {
     const scopeChanged = 'eloScope' in s || 'nickname' in s || 'autoNickname' in s;
@@ -640,15 +686,30 @@
     // Ручной ник важнее; если его нет — определённый автоматически
     ownNick = String(current.nickname || '').trim().toLowerCase() ||
       String(current.autoNickname || '').trim().toLowerCase();
-    root.toggleAttribute('data-elo-scope-mine', current.eloScope === 'mine');
     if (scopeChanged) {
       lastPath = '';
-      updateOwnPage();
+    }
+    updateOwnPage();
+    if (scopeChanged) {
       retagMine();
     }
-    root.toggleAttribute('data-elo-off', !current.enabled);
+    const mode = contextMode();
+    root.toggleAttribute('data-elo-scope-mine', current.eloScope === 'mine' && mode === 'default');
+    const revealUntil = Number(current.revealUntil) || 0;
+    const revealing = current.enabled && revealUntil > Date.now();
+    root.toggleAttribute('data-elo-revealed', revealing);
+    root.toggleAttribute('data-elo-off', !current.enabled || revealing || mode === 'show');
     for (const [key, names] of Object.entries(ATTR_FOR)) {
-      names.forEach((name) => root.toggleAttribute(`data-show-${name}`, !current[key]));
+      names.forEach((name) => root.toggleAttribute(`data-show-${name}`, !settingHidden(key)));
+    }
+    clearTimeout(revealTimer);
+    if (revealUntil > Date.now()) {
+      revealTimer = setTimeout(() => {
+        apply({ revealUntil: 0 });
+        chrome.storage.local.set({ revealUntil: 0 }, () => {
+          if (chrome.runtime.lastError) console.error('FACEIT Focus: failed to end temporary reveal', chrome.runtime.lastError);
+        });
+      }, revealUntil - Date.now() + 10);
     }
     // Остальное переключает CSS; здесь только текст "76 Elo" ↔ "?? Elo" — без пересканирования страницы
     const hide = nextHidden();
