@@ -4,7 +4,7 @@
 /* ── ELO ── */
 html:not([data-elo-off]):not([data-show-elo]) [data-elo-hidden],
 /* Компоненты FACEIT с Elo в имени класса — скрываются сразу при отрисовке */
-html:not([data-elo-off]):not([data-show-elo]) [class*="__Elo"],
+html:not([data-elo-off]):not([data-show-elo]) [class*="__Elo"]:not([class*="EloDelta"]):not([class*="EloChange"]),
 html:not([data-elo-off]):not([data-show-elo]) [class*="EloPoints"],
 html:not([data-elo-off]):not([data-show-elo]) [class*="EloBadge"] {
   visibility: hidden !important;
@@ -20,6 +20,10 @@ html:not([data-elo-off]):not([data-show-delta]) [class*="EloChange"] {
 /* ── Сезоны ── */
 html:not([data-elo-off]):not([data-show-season]) [data-elo-season] {
   visibility: hidden !important;
+}
+html:not([data-elo-off]):not([data-show-season]):not([data-elo-scope-mine]) [data-elo-season-card],
+html[data-elo-own-page]:not([data-elo-off]):not([data-show-season]) [data-elo-season-card] {
+  display: none !important;
 }
 
 /* ── Уровень ── */
@@ -50,13 +54,8 @@ html:not([data-elo-off]):not([data-show-next]) [data-elo-qq]::after {
 }
 
 /* ── Полоска уровней в профиле ── */
-html:not([data-elo-off]):not([data-show-bars]) [class*="styles__Track-"] {
+html:not([data-elo-off]):not([data-show-bars]) div[class*="__Row"][class*="__Track"] {
   display: none !important;
-}
-html:not([data-elo-off]):not([data-show-bars]) [data-elo-bar] {
-  background: #3a3a3a !important;
-  background-image: none !important;
-  box-shadow: none !important;
 }
 
 /* ── Monthly Ladder ── */
