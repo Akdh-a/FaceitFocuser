@@ -11,15 +11,16 @@
   const LADDER_ATTR = 'data-elo-ladder';
   const DELTA_ATTR = 'data-elo-delta';    // "+25" / "−25"
   const SEASON_ATTR = 'data-elo-season';  // ELO в карточках сезонов
+  const SEASON_CARD_ATTR = 'data-elo-season-card';
   const BADGE_ATTR = 'data-elo-badge';    // бейдж "значок уровня + ELO"
   const KEEP_ATTR = 'data-elo-keep';      // никогда не скрывать (фраза "до след. уровня")
   const QQ_ATTR = 'data-elo-qq';          // число заменяется на "??"
-  const BAR_ATTR = 'data-elo-bar';        // полоска уровня, перекрашивается в серый
   const LEVEL_ATTR = 'data-elo-level';    // значок уровня, найденный по структуре (комната матча)
 
   // Карточки сезонов в профиле: "SEASON 8 · 1 504 · Максимум в сезоне 1 586"
   // Только "Максимум в сезоне": по "Season 9" ловилась и "Статистика Season 9" с числом матчей
-  const SEASON_RE = /максимум\s+в\s+сезоне|season\s+(high|max|peak)|highest\s+elo/i;
+  const SEASON_RE = /максимум\s+в\s+сезоне|maximum\s+in\s+season|season\s+(high|max|peak)|highest\s+elo/i;
+  const SEASON_NUMBER_RE = /(?:^|\s)(?:season|сезон)\s+\d{1,2}(?=\s|$)/gi;
   // Подписи рядом с числом, которые точно значат "не ELO": матчи, победы, поражения, проценты, убийства
   const NOT_ELO_RE = /матч|match|побед|поражен|\bwins?\b|\bloss|%|убийств|kills|k\/d|\bhs\b|сезонов|seasons/i;
   const NEXT_RE = /нужно\s+для\s+перехода|needed\s+(to|for)\s+(reach|the\s+next)|to\s+reach\s+the\s+next\s+level/i;
@@ -33,7 +34,7 @@
   const LADDER_RE = /ladder|ладдер/i;                                        // "Monthly Ladder"
   const FLEX_RE = /гибк|flexible|ограничени|restrict|range|диапазон/i;       // "Гибкий ELO" в карточках режимов
   // Быстрый отсев: узлы без цифр и без этих слов нам не интересны (это большинство текста страницы)
-  const RELEVANT_RE = /\d|elo|ladder|ладдер|нужно|needed|reach/i;
+  const RELEVANT_RE = /\d|elo|ladder|ладдер|season|сезон|нужно|needed|reach/i;
   // Значок уровня: svg (лобби) или <i role="img"> (комната матча)
   const LEVEL_ICON = 'svg, img, canvas, i, [role="img"], [class*="SkillIcon"], [style*="background-image"]';
   const SKIP = 'script, style, textarea, input, [contenteditable="true"]';
@@ -312,11 +313,19 @@
   // Текстовые узлы вида "76 Elo ...": узел → исходный текст (чтобы вернуть число при выключении)
   const replaced = new Map();
   const QQ_TEXT = (v) => v.replace(/\d[\d\s.,]*/, '?? ');
-  const barsDone = new WeakSet();
 
   // Текст — это только фраза "[число] [Elo] нужно для перехода на следующий уровень" и ничего больше
   const SENTENCE_RE = /нужно\s+для\s+перехода\s+на\s+следующий\s+уровень|needed\s+(to|for)\s+(reach\s+)?the\s+next\s+level|to\s+reach\s+the\s+next\s+level/gi;
-  const isOnlySentence = (t) => t.replace(SENTENCE_RE, '').replace(/elo|[\d\s.,?:+\-−–]/gi, '') === '';
+  const isOnlySentence = (t) => {
+    const text = t.trim().replace(/\s+/g, ' ');
+    const match = SENTENCE_RE.exec(text);
+    SENTENCE_RE.lastIndex = 0;
+    if (!match) return false;
+    const before = text.slice(0, match.index);
+    const after = text.slice(match.index + match[0].length);
+    return /^\s*(?:\d{1,4}\s*)?(?:elo\s*)?[,.:—–-]*\s*$/i.test(before) &&
+      /^\s*[.!?]*\s*$/.test(after);
+  };
 
   const processNextLevel = (el) => {
     // Сама фраза всегда видна — снимаем с неё пометки скрытия (подменяется только число)
@@ -326,7 +335,6 @@
         e.removeAttribute(ATTR); e.removeAttribute(DELTA_ATTR); e.removeAttribute(SEASON_ATTR);
       });
     }
-    const box = climb(el, 120, 3);
     // "??" — только внутри самой фразы (раньше задевало соседние "Матчи", победы/поражения)
     const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     for (let n = w.nextNode(); n; n = w.nextNode()) {
@@ -338,33 +346,21 @@
         if (nextHidden()) n.nodeValue = QQ_TEXT(v);
       }
     }
-    // Полоски уровней ищем в следующем кадре и один раз на блок: замер раскладки во время
-    // обработки изменений DOM заставлял браузер пересчитывать страницу на каждом изменении
-    if (!barsDone.has(box)) {
-      barsDone.add(box);
-      requestAnimationFrame(() => findBars(box));
-    }
   };
 
-  // Ищем вверх блок с полосками: маленькие элементы без текста с цветным фоном
-  const findBars = (box) => {
-    if (!box.isConnected) return;
-    for (let cur = box, i = 0; i < 5 && cur && cur !== document.body; cur = cur.parentElement, i++) {
-      const all = cur.getElementsByTagName('*');
-      if (all.length > 400) return; // слишком большой блок — это уже не карточка
-      const bars = [];
-      for (const e of all) {
-        if (e.firstChild?.nodeType === 3 || e.closest('svg') || e.textContent.trim()) continue;
-        const r = e.getBoundingClientRect();
-        if (!r.height || r.height > 12 || r.width < 8) continue;
-        const cs = getComputedStyle(e);
-        if (cs.backgroundImage !== 'none' || !/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor)) bars.push(e);
-      }
-      if (bars.length >= 5) {
-        bars.forEach((b) => mark(b, BAR_ATTR));
-        return;
-      }
+  const findSeasonCard = (el) => {
+    for (let cur = el, i = 0; cur && cur !== document.body && i < 8; cur = cur.parentElement, i++) {
+      const text = shortText(cur, 400, ' ');
+      if (text === null) break;
+      const seasons = text.match(SEASON_NUMBER_RE) || [];
+      if (seasons.length === 1 && SEASON_RE.test(text)) return cur;
     }
+    return null;
+  };
+
+  const markSeasonCard = (el) => {
+    const card = findSeasonCard(el);
+    if (card) mark(card, SEASON_CARD_ATTR);
   };
 
   // ── "+25" / "−25" рядом с числом ELO ("1 674 +25" в истории матчей) ──
@@ -461,6 +457,7 @@
 
     if (LADDER_RE.test(text)) processLadder(el);
     if (el.closest(`[${LADDER_ATTR}]`)) return done.set(node, text);
+    if (/season|сезон/i.test(text)) markSeasonCard(el);
 
     // Фраза "до след. уровня": "77", "Elo" и остальной текст могут быть в разных span
     // Лимит 80 символов: только сама фраза (~50 символов + число). Иначе пока страница грузится
@@ -517,7 +514,10 @@
         const near = shortText(numEl.parentElement, 40);
         if (near !== null && NOT_ELO_RE.test(near) && !/\belo\b/i.test(near)) return done.set(node, text);
         const isSeason = nearContext(numEl, 5, 160, SEASON_RE);
-        if (isSeason) mark(numEl, SEASON_ATTR);
+        if (isSeason) {
+          mark(numEl, SEASON_ATTR);
+          markSeasonCard(numEl);
+        }
         // Текущий ELO скрывается, даже если это карточка сезона
         if (knownElo.has(value) || (!isSeason && nearContext(numEl, 2, 80))) {
           mark(numEl);
@@ -610,7 +610,11 @@
   // а hide.css скрывает элементы только когда такого атрибута нет.
   const SETTINGS = {
     enabled: true,      // главный выключатель
-    hideElo: true,      // ELO целиком: текущий, +/−, сезоны, "до след. уровня", полоска уровней
+    hideCurrentElo: true,
+    hideDelta: true,
+    hideSeason: true,
+    hideNext: true,
+    hideBars: true,
     hideLevel: true,    // значок уровня
     hideLadder: true,   // Monthly Ladder
     hideMission: true,  // Monthly Mission
@@ -620,11 +624,15 @@
   };
   // Какие атрибуты data-show-* ставит каждая настройка, когда она выключена
   const ATTR_FOR = {
-    hideElo: ['elo', 'delta', 'season', 'next', 'bars'],
+    hideCurrentElo: ['elo'],
+    hideDelta: ['delta'],
+    hideSeason: ['season'],
+    hideNext: ['next'],
+    hideBars: ['bars'],
     hideLevel: ['level'], hideLadder: ['ladder'], hideMission: ['mission'],
   };
   const current = { ...SETTINGS };
-  function nextHidden() { return current.enabled && current.hideElo; }
+  function nextHidden() { return current.enabled && current.hideNext; }
 
   const apply = (s) => {
     const scopeChanged = 'eloScope' in s || 'nickname' in s || 'autoNickname' in s;
@@ -650,7 +658,15 @@
       if (node.nodeValue !== want) node.nodeValue = want;
     });
   };
-  chrome.storage.local.get(SETTINGS, apply);
+  chrome.storage.local.get(null, (stored) => {
+    const legacyHideElo = typeof stored.hideElo === 'boolean' ? stored.hideElo : true;
+    const migrated = {};
+    for (const key of ['hideCurrentElo', 'hideDelta', 'hideSeason', 'hideNext', 'hideBars']) {
+      if (typeof stored[key] !== 'boolean') migrated[key] = legacyHideElo;
+    }
+    apply({ ...SETTINGS, ...stored, ...migrated });
+    if (Object.keys(migrated).length) chrome.storage.local.set(migrated);
+  });
   chrome.storage.onChanged.addListener((changes) => {
     const s = {};
     for (const k of Object.keys(SETTINGS)) if (changes[k]) s[k] = changes[k].newValue;

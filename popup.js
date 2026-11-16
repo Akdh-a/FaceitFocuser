@@ -16,13 +16,13 @@ const TABS = [
     id: 'elo', name: 'ELO', desc: 'Всё, по чему можно узнать твой ELO',
     items: [
       {
-        key: 'hideElo', icon: 'hash', title: 'Скрыть ELO', sub: 'Лобби, профиль, комната матча, история',
-        includes: [
-          ['hash', 'Текущий ELO'],
-          ['delta', 'Изменения +/− после матча'],
-          ['calendar', 'ELO за сезоны и максимум в сезоне'],
-          ['help', 'Elo до след. уровня — число станет «??»'],
-          ['bars', 'Цветная полоска уровней в профиле'],
+        key: 'hideElo', icon: 'hash', title: 'Скрыть весь ELO', sub: 'Включает и выключает все пункты ELO ниже',
+        children: [
+          { key: 'hideCurrentElo', icon: 'hash', title: 'Текущий ELO', sub: 'Профиль, лобби и комната матча' },
+          { key: 'hideDelta', icon: 'delta', title: 'Изменения после матча', sub: 'Например, +25 или −25' },
+          { key: 'hideSeason', icon: 'calendar', title: 'Карточки сезонов', sub: 'Блоки Season 7, Season 8 и другие в профиле' },
+          { key: 'hideNext', icon: 'help', title: 'ELO до следующего уровня', sub: 'Число заменяется на «??»' },
+          { key: 'hideBars', icon: 'bars', title: 'Шкала уровней 1–10', sub: 'Ряд уровней в статистике сезона' },
         ],
       },
     ],
@@ -42,7 +42,10 @@ const TABS = [
   },
 ];
 
-const KEYS = TABS.flatMap((t) => t.items.map((i) => i.key));
+const ELO_KEYS = TABS.find((t) => t.id === 'elo').items[0].children.map((i) => i.key);
+const KEYS = TABS.flatMap((t) => t.items.flatMap((i) => i.children
+  ? i.children.map((child) => child.key)
+  : [i.key]));
 const PRESETS = {
   all: Object.fromEntries(KEYS.map((k) => [k, true])),
   level: Object.fromEntries(KEYS.map((k) => [k, k !== 'hideLevel'])),
@@ -57,37 +60,44 @@ const svg = (name) => `<svg viewBox="0 0 24 24">${ICON[name]}</svg>`;
 
 function renderTabs() {
   $('tabs').innerHTML = TABS.map((t) => {
-    const on = t.items.filter((i) => state[i.key]).length;
+    const keys = t.items.flatMap((i) => i.children ? i.children.map((child) => child.key) : [i.key]);
+    const on = keys.filter((key) => state[key]).length;
     return `<button role="tab" data-tab="${t.id}" class="${t.id === state.popupTab ? 'active' : ''}">
-      ${t.name}<span class="count">${on}/${t.items.length}</span></button>`;
+      ${t.name}<span class="count">${on}/${keys.length}</span></button>`;
   }).join('');
+}
+
+function renderOption(i, child = false) {
+  return `<label class="opt ${child ? 'child' : ''} ${state[i.key] ? 'on' : ''}">
+    <div class="opt-icon">${svg(i.icon)}</div>
+    <div class="opt-text">
+      <div class="opt-title">${i.title}</div>
+      <div class="opt-sub">${i.sub}</div>
+    </div>
+    <span class="switch">
+      <input type="checkbox" data-key="${i.key}" ${state[i.key] ? 'checked' : ''}>
+      <span class="track"><span class="thumb"></span></span>
+    </span>
+  </label>`;
 }
 
 function renderPanel() {
   const tab = TABS.find((t) => t.id === state.popupTab) || TABS[0];
-  $('panel').innerHTML = `<div class="tab-desc">${tab.desc}</div>` + tab.items.map((i) => `
-    <label class="opt ${state[i.key] ? 'on' : ''}">
-      <div class="opt-icon">${svg(i.icon)}</div>
-      <div class="opt-text">
-        <div class="opt-title">${i.title}</div>
-        <div class="opt-sub">${i.sub}</div>
-      </div>
-      <span class="switch">
-        <input type="checkbox" data-key="${i.key}" ${state[i.key] ? 'checked' : ''}>
-        <span class="track"><span class="thumb"></span></span>
-      </span>
-    </label>${i.includes ? `
-    <div class="includes ${state[i.key] ? 'on' : ''}">
-      <div class="includes-head">Вместе с ним скрывается</div>
-      ${i.includes.map(([ic, text]) => `<div class="inc">${svg(ic)}<span>${text}</span></div>`).join('')}
-    </div>` : ''}`).join('') + (tab.id === 'elo' ? scopeBlock() : '');
+  $('panel').innerHTML = `<div class="tab-desc">${tab.desc}</div>` + tab.items.map((i) => i.children
+    ? `<section class="elo-group">
+        ${renderOption(i)}
+        <div class="elo-children">${i.children.map((child) => renderOption(child, true)).join('')}</div>
+      </section>`
+    : renderOption(i)).join('') + (tab.id === 'elo' ? scopeBlock() : '');
+  const master = $('panel').querySelector('[data-key="hideElo"]');
+  if (master) master.indeterminate = ELO_KEYS.some((key) => state[key]) && !state.hideElo;
 }
 
 // Чей ELO скрывать: весь или только свой (ELO противников и тиммейтов видно)
 function scopeBlock() {
   const mine = state.eloScope === 'mine';
   return `
-    <div class="scope ${state.hideElo ? '' : 'off'}">
+    <div class="scope ${ELO_KEYS.some((key) => state[key]) ? '' : 'off'}">
       <div class="includes-head">Чей ELO скрывать</div>
       <div class="seg">
         <button data-scope="all" class="${mine ? '' : 'active'}">Весь ELO</button>
@@ -129,7 +139,14 @@ function render() {
 }
 
 function save(changes) {
+  if (Object.prototype.hasOwnProperty.call(changes, 'hideElo')) {
+    const hide = changes.hideElo;
+    changes = { ...changes };
+    delete changes.hideElo;
+    ELO_KEYS.forEach((key) => { changes[key] = hide; });
+  }
   Object.assign(state, changes);
+  state.hideElo = ELO_KEYS.every((key) => state[key]);
   chrome.storage.local.set(changes);
   render();
 }
@@ -152,8 +169,15 @@ $('presets').addEventListener('click', (e) => {
   if (b) save({ enabled: true, ...PRESETS[b.dataset.preset] });
 });
 
-chrome.storage.local.get(defaults, (s) => {
-  state = s;
+chrome.storage.local.get(null, (stored) => {
+  const legacyHideElo = typeof stored.hideElo === 'boolean' ? stored.hideElo : true;
+  const migrated = {};
+  ELO_KEYS.forEach((key) => {
+    if (typeof stored[key] !== 'boolean') migrated[key] = legacyHideElo;
+  });
+  state = { ...defaults, ...stored, ...migrated };
+  state.hideElo = ELO_KEYS.every((key) => state[key]);
+  if (Object.keys(migrated).length) chrome.storage.local.set(migrated);
   render();
 });
 // Ник, введённый раньше вручную, больше не нужен — работает автоопределение

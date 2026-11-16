@@ -121,6 +121,13 @@ main { padding: 10px 16px 6px; display: flex; flex-direction: column; gap: 6px; 
 }
 .opt:hover { background: var(--card-hover); }
 .opt.on { border-color: rgba(255, 85, 0, 0.25); }
+.elo-group { display: flex; flex-direction: column; gap: 6px; }
+.elo-group > .opt { border-color: rgba(255, 85, 0, 0.25); }
+.elo-children { display: flex; flex-direction: column; gap: 5px; padding-left: 12px; }
+.opt.child { padding: 8px 10px; }
+.opt.child .opt-icon { width: 26px; height: 26px; }
+.opt.child .opt-title { font-size: 12px; }
+.opt.child .opt-sub { font-size: 11px; }
 .opt-icon {
   width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
   display: grid; place-items: center;
