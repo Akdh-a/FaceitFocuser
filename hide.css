@@ -69,6 +69,11 @@ html:not([data-elo-off]):not([data-show-mission]) [data-base-ui-click-trigger]:h
   display: none !important;
 }
 
+/* ── Анти-тильт: винрейт и серии побед/поражений ── */
+html:not([data-elo-off]):not([data-show-tilt]) [data-elo-tilt] {
+  display: none !important;
+}
+
 /* Стоит в конце файла: при равной специфичности побеждает правило ниже */
 /* ── Режим "только свой ELO": чужой ELO (без пометки data-elo-mine) снова видно.
    На своём профиле (data-elo-own-page) это правило не действует — там всё твоё. ── */

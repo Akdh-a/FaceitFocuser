@@ -10,6 +10,9 @@
     "128": "icon128.png"
   },
   "permissions": ["storage"],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_title": "FACEIT Focus",
     "default_popup": "popup.html",

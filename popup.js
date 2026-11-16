@@ -51,16 +51,35 @@ const THEME_COLORS = [
   { name: 'Красный', value: '#ef4444' },
 ];
 const ELO_KEYS = TABS.find((t) => t.id === 'elo').items[0].children.map((i) => i.key);
-const KEYS = TABS.flatMap((t) => t.items.flatMap((i) => i.children
+const KEYS = [...TABS.flatMap((t) => t.items.flatMap((i) => i.children
   ? i.children.map((child) => child.key)
-  : [i.key]));
+  : [i.key])), 'hideTilt'];
 const PRESETS = {
   all: Object.fromEntries(KEYS.map((k) => [k, true])),
-  level: Object.fromEntries(KEYS.map((k) => [k, k !== 'hideLevel'])),
-  none: Object.fromEntries(KEYS.map((k) => [k, false])),
+  level: { ...Object.fromEntries(KEYS.map((k) => [k, k !== 'hideLevel'])), hideTilt: true },
+  none: { ...Object.fromEntries(KEYS.map((k) => [k, false])), hideTilt: false },
 };
 
-const defaults = { enabled: true, popupTab: 'elo', eloScope: 'all', autoNickname: '', accentColor: '#ff5500', ...PRESETS.all };
+const CONTEXT_MODES = [
+  { value: 'default', label: 'Обычная маска' },
+  { value: 'levelOnly', label: 'Только уровень' },
+  { value: 'hide', label: 'Скрыть всё' },
+  { value: 'show', label: 'Показать всё' },
+];
+const CONTEXTS = [
+  { key: 'contextProfile', label: 'Профили игроков' },
+  { key: 'contextLobby', label: 'Лобби и очередь' },
+  { key: 'contextMatch', label: 'Матч и комната' },
+];
+const MAX_REVEALS = 2;
+const REVEAL_DURATION_MS = 30_000;
+const defaults = {
+  enabled: true, popupTab: 'elo', eloScope: 'all', autoNickname: '', accentColor: '#ff5500',
+  contextProfile: 'default', contextLobby: 'default', contextMatch: 'default',
+  revealCount: 0, revealUntil: 0,
+  ...PRESETS.all,
+  hideTilt: false,
+};
 let state = {};
 
 const $ = (id) => document.getElementById(id);
@@ -92,7 +111,7 @@ function renderOption(i, child = false) {
 function renderPanel() {
   const tab = TABS.find((t) => t.id === state.popupTab) || TABS[0];
   if (tab.id === 'settings') {
-    $('panel').innerHTML = `<div class="tab-desc">${tab.desc}</div>${themeBlock()}`;
+    $('panel').innerHTML = `<div class="tab-desc">${tab.desc}</div>${settingsBlock()}`;
     return;
   }
   $('panel').innerHTML = `<div class="tab-desc">${tab.desc}</div>` + tab.items.map((i) => i.children
@@ -123,6 +142,87 @@ function themeBlock() {
       </label>
       ${state.themeError ? `<div class="theme-error" role="alert">${escapeHtml(state.themeError)}</div>` : ''}
     </section>`;
+}
+
+function settingsBlock() {
+  return `${themeBlock()}
+    <section class="settings-section">
+      <div class="settings-heading">Анти-тильт</div>
+      ${renderOption({ key: 'hideTilt', icon: 'target', title: 'Скрывать винрейт и серии', sub: 'Дополняет основную маску ELO процентом побед и сериями' })}
+    </section>
+    <section class="settings-section">
+      <div class="settings-heading">Маска по контексту</div>
+      <div class="theme-desc">«Только уровень» скрывает ELO и статистику, оставляя значок уровня. Режим страницы заменяет обычные переключатели.</div>
+      ${CONTEXTS.map(({ key, label }) => `
+        <label class="context-setting">
+          <span>${label}</span>
+          <select data-context-setting="${key}">
+            ${CONTEXT_MODES.map(({ value, label: modeLabel }) => `
+              <option value="${value}" ${state[key] === value ? 'selected' : ''}>${modeLabel}</option>`).join('')}
+          </select>
+        </label>`).join('')}
+    </section>
+    <section class="reveal-card">
+      <div class="settings-heading">Не проверяй</div>
+      <div class="theme-desc">Покажет все скрытые данные на 30 секунд. Доступно два раза за сессию браузера.</div>
+      <button class="reveal-button" type="button" data-reveal>Показать всё на 30 секунд</button>
+      <div class="reveal-status" id="reveal-status" role="status"></div>
+      ${state.revealError ? `<div class="theme-error" role="alert">${escapeHtml(state.revealError)}</div>` : ''}
+    </section>`;
+}
+
+function updateRevealStatus() {
+  const status = $('reveal-status');
+  const button = $('panel').querySelector('[data-reveal]');
+  if (!status || !button) return;
+  const remaining = Math.max(0, MAX_REVEALS - (Number(state.revealCount) || 0));
+  const seconds = Math.max(0, Math.ceil((Number(state.revealUntil) - Date.now()) / 1000));
+  button.disabled = seconds > 0 || remaining === 0 || !state.enabled;
+  button.textContent = seconds > 0 ? `Всё показано · ${seconds} сек.` : 'Показать всё на 30 секунд';
+  status.textContent = !state.enabled
+    ? 'Сначала включи расширение.'
+    : seconds > 0
+      ? `После показа останется ${remaining} ${remaining === 1 ? 'попытка' : 'попытки'}.`
+      : remaining > 0
+        ? `Осталось показов: ${remaining} из ${MAX_REVEALS}.`
+        : 'Лимит показов на эту сессию исчерпан.';
+}
+
+function revealAllTemporarily() {
+  chrome.storage.local.get(['revealCount', 'revealUntil'], (stored) => {
+    if (chrome.runtime.lastError) {
+      state.revealError = `Не удалось проверить лимит: ${chrome.runtime.lastError.message}`;
+      render();
+      return;
+    }
+    const count = Number(stored.revealCount) || 0;
+    const until = Number(stored.revealUntil) || 0;
+    if (until > Date.now()) {
+      state.revealUntil = until;
+      updateRevealStatus();
+      return;
+    }
+    if (count >= MAX_REVEALS) {
+      state.revealCount = count;
+      state.revealError = 'Лимит показов на эту сессию исчерпан.';
+      render();
+      return;
+    }
+    state.revealError = '';
+    chrome.storage.local.set({
+      revealCount: count + 1,
+      revealUntil: Date.now() + REVEAL_DURATION_MS,
+    }, () => {
+      if (chrome.runtime.lastError) {
+        state.revealError = `Не удалось показать данные: ${chrome.runtime.lastError.message}`;
+        render();
+        return;
+      }
+      state.revealCount = count + 1;
+      state.revealUntil = Date.now() + REVEAL_DURATION_MS;
+      render();
+    });
+  });
 }
 
 function isHexColor(value) {
@@ -224,9 +324,15 @@ $('tabs').addEventListener('click', (e) => {
 $('panel').addEventListener('change', (e) => {
   const key = e.target.dataset.key;
   if (key) save({ [key]: e.target.checked });
+  const contextKey = e.target.dataset.contextSetting;
+  if (contextKey && CONTEXTS.some((context) => context.key === contextKey) &&
+      CONTEXT_MODES.some((mode) => mode.value === e.target.value)) {
+    save({ [contextKey]: e.target.value });
+  }
   if (e.target.id === 'accent-color-picker') setAccentColor(e.target.value);
 });
 $('panel').addEventListener('click', (e) => {
+  if (e.target.closest('[data-reveal]')) revealAllTemporarily();
   const b = e.target.closest('[data-scope]');
   if (b) save({ eloScope: b.dataset.scope });
   const colorButton = e.target.closest('[data-accent-color]');
@@ -259,6 +365,10 @@ chrome.storage.local.get(null, (stored) => {
   });
   state = { ...defaults, ...stored, ...migrated };
   if (!isHexColor(state.accentColor)) state.accentColor = defaults.accentColor;
+  for (const { key } of CONTEXTS) {
+    if (state[key] === 'antiTilt') state[key] = 'levelOnly';
+    if (!CONTEXT_MODES.some((mode) => mode.value === state[key])) state[key] = 'default';
+  }
   state.hideElo = ELO_KEYS.every((key) => state[key]);
   applyAccentColor(state.accentColor);
   if (Object.keys(migrated).length) chrome.storage.local.set(migrated);
@@ -268,10 +378,13 @@ chrome.storage.local.get(null, (stored) => {
 chrome.storage.local.remove('nickname');
 // Аккаунт мог определиться, пока попап открыт
 chrome.storage.onChanged.addListener((ch) => {
-  if (ch.autoNickname) { state.autoNickname = ch.autoNickname.newValue || ''; render(); }
+  if (ch.autoNickname) state.autoNickname = ch.autoNickname.newValue || '';
+  if (ch.revealCount) state.revealCount = Number(ch.revealCount.newValue) || 0;
+  if (ch.revealUntil) state.revealUntil = Number(ch.revealUntil.newValue) || 0;
   if (ch.accentColor) {
     state.accentColor = isHexColor(ch.accentColor.newValue) ? ch.accentColor.newValue : defaults.accentColor;
     applyAccentColor(state.accentColor);
-    render();
   }
+  if (ch.autoNickname || ch.revealCount || ch.revealUntil || ch.accentColor) render();
 });
+setInterval(updateRevealStatus, 1000);
