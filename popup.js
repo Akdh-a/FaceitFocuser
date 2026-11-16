@@ -40,8 +40,16 @@ const TABS = [
       { key: 'hideMission', icon: 'target', title: 'Monthly Mission', sub: 'Блок миссии сезона' },
     ],
   },
+  { id: 'settings', name: 'Настройки', desc: 'Настрой внешний вид расширения', items: [] },
 ];
 
+const THEME_COLORS = [
+  { name: 'Оранжевый', value: '#ff5500' },
+  { name: 'Синий', value: '#3987ff' },
+  { name: 'Фиолетовый', value: '#a855f7' },
+  { name: 'Зелёный', value: '#22c55e' },
+  { name: 'Красный', value: '#ef4444' },
+];
 const ELO_KEYS = TABS.find((t) => t.id === 'elo').items[0].children.map((i) => i.key);
 const KEYS = TABS.flatMap((t) => t.items.flatMap((i) => i.children
   ? i.children.map((child) => child.key)
@@ -52,7 +60,7 @@ const PRESETS = {
   none: Object.fromEntries(KEYS.map((k) => [k, false])),
 };
 
-const defaults = { enabled: true, popupTab: 'elo', eloScope: 'all', autoNickname: '', ...PRESETS.all };
+const defaults = { enabled: true, popupTab: 'elo', eloScope: 'all', autoNickname: '', accentColor: '#ff5500', ...PRESETS.all };
 let state = {};
 
 const $ = (id) => document.getElementById(id);
@@ -63,7 +71,7 @@ function renderTabs() {
     const keys = t.items.flatMap((i) => i.children ? i.children.map((child) => child.key) : [i.key]);
     const on = keys.filter((key) => state[key]).length;
     return `<button role="tab" data-tab="${t.id}" class="${t.id === state.popupTab ? 'active' : ''}">
-      ${t.name}<span class="count">${on}/${keys.length}</span></button>`;
+      ${t.name}${keys.length ? `<span class="count">${on}/${keys.length}</span>` : ''}</button>`;
   }).join('');
 }
 
@@ -83,6 +91,10 @@ function renderOption(i, child = false) {
 
 function renderPanel() {
   const tab = TABS.find((t) => t.id === state.popupTab) || TABS[0];
+  if (tab.id === 'settings') {
+    $('panel').innerHTML = `<div class="tab-desc">${tab.desc}</div>${themeBlock()}`;
+    return;
+  }
   $('panel').innerHTML = `<div class="tab-desc">${tab.desc}</div>` + tab.items.map((i) => i.children
     ? `<section class="elo-group">
         ${renderOption(i)}
@@ -91,6 +103,53 @@ function renderPanel() {
     : renderOption(i)).join('') + (tab.id === 'elo' ? scopeBlock() : '');
   const master = $('panel').querySelector('[data-key="hideElo"]');
   if (master) master.indeterminate = ELO_KEYS.some((key) => state[key]) && !state.hideElo;
+}
+
+function themeBlock() {
+  const color = isHexColor(state.accentColor) ? state.accentColor : defaults.accentColor;
+  return `
+    <section class="theme-card">
+      <div class="theme-title">Цвет расширения</div>
+      <div class="theme-desc">Выбери цвет акцентов и кнопок</div>
+      <div class="theme-swatches">
+        ${THEME_COLORS.map(({ name, value }) => `
+          <button type="button" class="theme-swatch ${color.toLowerCase() === value ? 'active' : ''}"
+            data-accent-color="${value}" style="--swatch-color:${value}"
+            aria-label="${name}" title="${name}"></button>`).join('')}
+      </div>
+      <label class="custom-color" for="accent-color-picker">
+        <span>Свой цвет</span>
+        <input id="accent-color-picker" type="color" value="${color}" aria-label="Выбрать свой цвет">
+      </label>
+      ${state.themeError ? `<div class="theme-error" role="alert">${escapeHtml(state.themeError)}</div>` : ''}
+    </section>`;
+}
+
+function isHexColor(value) {
+  return typeof value === 'string' && /^#[\da-f]{6}$/i.test(value);
+}
+
+function applyAccentColor(value) {
+  if (!isHexColor(value)) return;
+  const red = parseInt(value.slice(1, 3), 16);
+  const green = parseInt(value.slice(3, 5), 16);
+  const blue = parseInt(value.slice(5, 7), 16);
+  document.documentElement.style.setProperty('--accent', value);
+  document.documentElement.style.setProperty('--accent-rgb', `${red}, ${green}, ${blue}`);
+  document.documentElement.style.setProperty('--accent-soft', `rgba(${red}, ${green}, ${blue}, 0.14)`);
+}
+
+function setAccentColor(value) {
+  if (!isHexColor(value)) return;
+  state.accentColor = value.toLowerCase();
+  state.themeError = '';
+  applyAccentColor(state.accentColor);
+  render();
+  chrome.storage.local.set({ accentColor: state.accentColor }, () => {
+    if (!chrome.runtime.lastError) return;
+    state.themeError = `Не удалось сохранить цвет: ${chrome.runtime.lastError.message}`;
+    render();
+  });
 }
 
 // Чей ELO скрывать: весь или только свой (ELO противников и тиммейтов видно)
@@ -111,6 +170,12 @@ function scopeBlock() {
           <div class="acc-sub">${state.autoNickname ? 'Определён автоматически' : 'Открой свой профиль на FACEIT один раз'}</div>
         </div>
       </div>
+      <button class="account-reset" type="button" data-reset-account>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"/><path d="M3 3v5h5"/></svg>
+        Сбросить аккаунт FACEIT
+      </button>
+      ${state.accountResetError ? `<div class="account-reset-error" role="alert">${escapeHtml(state.accountResetError)}</div>` : ''}
+      <div class="hint">Если отображается старый ник, сбрось его и открой профиль нового аккаунта на FACEIT.</div>
       <div class="hint">Скрывается ELO в строке с твоим ником и весь твой профиль. ELO остальных игроков видно.</div>` : `
       <div class="hint">Скрывается ELO всех игроков, включая противников и тиммейтов.</div>`}
     </div>`;
@@ -159,14 +224,31 @@ $('tabs').addEventListener('click', (e) => {
 $('panel').addEventListener('change', (e) => {
   const key = e.target.dataset.key;
   if (key) save({ [key]: e.target.checked });
+  if (e.target.id === 'accent-color-picker') setAccentColor(e.target.value);
 });
 $('panel').addEventListener('click', (e) => {
   const b = e.target.closest('[data-scope]');
   if (b) save({ eloScope: b.dataset.scope });
+  const colorButton = e.target.closest('[data-accent-color]');
+  if (colorButton) setAccentColor(colorButton.dataset.accentColor);
+  if (e.target.closest('[data-reset-account]')) {
+    chrome.storage.local.remove('autoNickname', () => {
+      if (chrome.runtime.lastError) {
+        state.accountResetError = `Не удалось сбросить аккаунт: ${chrome.runtime.lastError.message}`;
+      } else {
+        state.autoNickname = '';
+        state.accountResetError = '';
+      }
+      render();
+    });
+  }
 });
 $('presets').addEventListener('click', (e) => {
   const b = e.target.closest('[data-preset]');
   if (b) save({ enabled: true, ...PRESETS[b.dataset.preset] });
+});
+$('panel').addEventListener('input', (e) => {
+  if (e.target.id === 'accent-color-picker') applyAccentColor(e.target.value);
 });
 
 chrome.storage.local.get(null, (stored) => {
@@ -176,7 +258,9 @@ chrome.storage.local.get(null, (stored) => {
     if (typeof stored[key] !== 'boolean') migrated[key] = legacyHideElo;
   });
   state = { ...defaults, ...stored, ...migrated };
+  if (!isHexColor(state.accentColor)) state.accentColor = defaults.accentColor;
   state.hideElo = ELO_KEYS.every((key) => state[key]);
+  applyAccentColor(state.accentColor);
   if (Object.keys(migrated).length) chrome.storage.local.set(migrated);
   render();
 });
@@ -185,4 +269,9 @@ chrome.storage.local.remove('nickname');
 // Аккаунт мог определиться, пока попап открыт
 chrome.storage.onChanged.addListener((ch) => {
   if (ch.autoNickname) { state.autoNickname = ch.autoNickname.newValue || ''; render(); }
+  if (ch.accentColor) {
+    state.accentColor = isHexColor(ch.accentColor.newValue) ? ch.accentColor.newValue : defaults.accentColor;
+    applyAccentColor(state.accentColor);
+    render();
+  }
 });
